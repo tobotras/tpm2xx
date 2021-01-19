@@ -21,6 +21,7 @@ void func_dumper(int);
 void calc_dumper(int);
 void heatcold_dumper(int);
 void state_dumper(int);
+void ret_dumper(int);
 
 struct {
   int number;
@@ -123,7 +124,7 @@ struct {
    { 0x0404, "V.tOF", "Пауза между импульсами доводки", UINT16 },
 
    { 0, NULL, "Группа DISP. Параметры индикации" },
-   { 0x0500, "rEt", "Время выхода из режима программирования", UINT16 },
+   { 0x0500, "rEt", "Время выхода из режима программирования", UINT16, ret_dumper },
    { 0x0501, "DiS1", "Режим индикации 1", UINT16, onoff_dumper },
    { 0x0502, "DiS2", "Режим индикации 2", UINT16, onoff_dumper },
    { 0x0503, "DiS3", "Режим индикации 3", UINT16, onoff_dumper },
@@ -156,7 +157,7 @@ struct {
    { 0, NULL, "Группа SECR. Параметры секретности" },
    { 0x0700, "oAPt", "Защита параметров от просмотра", UINT16 },
    { 0x0701, "wtPt", "Защита параметров от изменения", UINT16 },
-   { 0x0702, "EdPt", "Защита отдельный параметров от просмотра и изменений", UINT16 },
+   { 0x0702, "EdPt", "Защита отдельный параметров от просмотра и изменений", UINT16, onoff_dumper },
   };
 
 uint16_t values[10000];			/* FIXME */
@@ -308,6 +309,15 @@ void state_dumper(int idx)
 	  printf("0");
   } else
     printf("0x%x", state);
+}
+
+void ret_dumper(int idx)
+{
+  uint16_t value = get_word(registers[idx].number);
+  if (value == 100)
+    printf("откл");
+  else
+    printf("%dс", value);
 }
 
 void func_dumper(int idx)
