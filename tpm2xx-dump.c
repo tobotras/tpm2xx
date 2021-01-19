@@ -20,6 +20,7 @@ void onoff_dumper(int);
 void func_dumper(int);
 void calc_dumper(int);
 void heatcold_dumper(int);
+void state_dumper(int);
 
 struct {
   int number;
@@ -37,7 +38,7 @@ struct {
 } registers[] =
   {
    { 0, NULL, "Группа LvoP. Оперативные параметры" },  
-   { 0x0000, "STAT", "Регистр статуса", HEX },
+   { 0x0000, "STAT", "Регистр статуса", HEX, state_dumper },
    { 0x0001, "PV1", "Измеренная величина на входе 1", INT16, pv1_dumper },
    { 0x0002, "PV2", "Измеренная величина на входе 2", INT16, pv2_dumper },
    { 0x0003, "LUPV", "Значение на выходе вычислителя", INT16, pv1_dumper },
@@ -54,7 +55,7 @@ struct {
    { 0, NULL, "Группа LvoP. Оперативные параметры прибора" },
    { 0x1000, "DEV", "Тип прибора", CHAR8 },
    { 0x1004, "VER", "Версия прибора", CHAR8 },
-   { 0x1008, "STAT", "Регистр статуса", HEX },
+   { 0x1008, "STAT", "Регистр статуса", HEX, state_dumper },
    { 0x1009, "PV1", "Измеренная величина на входе 1", FLOAT32 },
    { 0x100B, "PV2", "Измеренная величина на входе 2", FLOAT32 },
    { 0x100D, "LUPV", "Значение на выходе вычислителя", FLOAT32 },
@@ -194,8 +195,10 @@ int read_register(modbus_t *ctx, int idx)
 	current_value += size;
 	//if ( res == -1 && verbose )
 	//  fprintf(stderr, "Can't read register %d (0x%04x) (size %d): %s\n", idx, registers[idx].number, size, modbus_strerror(errno));
-	if (res == -1)
+	if (res == -1) {
 	  registers[idx].number = 0;
+      registers[idx].name = NULL;
+    }
   }
 }
 
@@ -223,46 +226,12 @@ char *recode8(char *text)
   return dest;
 }
 
-void display_state(uint16_t state)
-{
-  if (verbose) {
-	struct {
-	  uint16_t flag;
-	  char *text;
-	} bits[] =
-		{
-		 { 1<<0, "ошибка на входе 1" },
-		 { 1<<1, "ошибка на входе 2" },
-		 { 1<<2, "ошибка вычисления" },
-		 { 1<<3, "ошибка, несовместимая с работой прибора" },
-		 { 1<<4, "срабатывание реле 1" },
-		 { 1<<5, "срабатывание реле 2" },
-		 { 1<<6, "дистанционное управление регулятором (r-L)" },
-		 { 1<<8, "ручной режим управления" },
-		 { 1<<9, "регулятор" },
-		 { 1<<10, "автонастройка" },
-		 { 1<<11, "LBA" }
-		};
-
-	int shown = 0;
-	for (int i = 0; i < sizeof bits/sizeof bits[0]; ++i) {
-	  if (state & bits[i].flag) {
-		printf("%s%s", shown ? ", " : "", bits[i].text);
-		shown = 1;
-	  }
-	}
-	if (!shown)
-	  printf("0");
-  } else
-    printf("0x%x", state);
-}
-
 void dump_raw(int idx)
 {
   char buf[9];
   switch (registers[idx].type) {
   case HEX:
-	display_state(values[current_value]);
+    printf("0x%x", values[current_value]);
     break;
   case INT16:
     printf("%d", (int16_t) values[current_value]);
@@ -304,6 +273,41 @@ uint16_t get_word(uint16_t number)
 	idx += data_size(reg);
   }
   assert(0);
+}
+
+void state_dumper(int idx)
+{
+  uint16_t state = get_word(registers[idx].number);
+  if (verbose) {
+	struct {
+	  uint16_t flag;
+	  char *text;
+	} bits[] =
+		{
+		 { 1<<0, "ошибка на входе 1" },
+		 { 1<<1, "ошибка на входе 2" },
+		 { 1<<2, "ошибка вычисления" },
+		 { 1<<3, "ошибка, несовместимая с работой прибора" },
+		 { 1<<4, "срабатывание реле 1" },
+		 { 1<<5, "срабатывание реле 2" },
+		 { 1<<6, "дистанционное управление регулятором (r-L)" },
+		 { 1<<8, "ручной режим управления" },
+		 { 1<<9, "регулятор" },
+		 { 1<<10, "автонастройка" },
+		 { 1<<11, "LBA" }
+		};
+
+	int shown = 0;
+	for (int i = 0; i < sizeof bits/sizeof bits[0]; ++i) {
+	  if (state & bits[i].flag) {
+		printf("%s%s", shown ? ", " : "", bits[i].text);
+		shown = 1;
+	  }
+	}
+	if (!shown)
+	  printf("0");
+  } else
+    printf("0x%x", state);
 }
 
 void func_dumper(int idx)
@@ -369,7 +373,7 @@ void dump_register(int idx)
     return;
   }
 
-  if (registers[idx].number == 0) return; /* Skip over read errors */
+  if (registers[idx].number == 0 && registers[idx].name == NULL) return; /* Skip over read errors */
 
   printf("%s ", registers[idx].name);
   if (verbose)
