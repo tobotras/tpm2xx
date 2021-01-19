@@ -15,6 +15,11 @@ void pv2_dumper(int);
 void dec_dumper(int);
 void cent_dumper(int);
 void milli_dumper(int);
+void startstop_dumper(int);
+void onoff_dumper(int);
+void func_dumper(int);
+void calc_dumper(int);
+void heatcold_dumper(int);
 
 struct {
   int number;
@@ -43,8 +48,8 @@ struct {
    { 0, NULL, "Группа LvoP. Рабочие параметры прибора" },
    { 0x0007, "r-L", "Переход на внешнее управление", UINT16 },
    { 0x0008, "r.out", "Выходной сигнал регулятора", INT16, milli_dumper },
-   { 0x0009, "R-S", "Запуск/остановка регулирования", UINT16 },
-   { 0x000A, "AT", "Запуск/остановка процесса автонастройки", UINT16 },
+   { 0x0009, "R-S", "Запуск/остановка регулирования", UINT16, startstop_dumper },
+   { 0x000A, "AT", "Запуск/остановка процесса автонастройки", UINT16, startstop_dumper },
 
    { 0, NULL, "Группа LvoP. Оперативные параметры прибора" },
    { 0x1000, "DEV", "Тип прибора", CHAR8 },
@@ -70,7 +75,7 @@ struct {
    { 0x0206, "KU1", "Наклон характеристики для входа 1", UINT16, milli_dumper },
    { 0x0207, "Fb1", "Полоса фильтра для входа 1", UINT16, pv1_dumper },
    { 0x0208, "inF1", "Постоянная времени цифрового фильтра для входа 1", UINT16 },
-   { 0x0209, "Sqr1", "Вычислитель квадратного корня для аналогового входа 1", UINT16 },
+   { 0x0209, "Sqr1", "Вычислитель квадратного корня для аналогового входа 1", UINT16, onoff_dumper },
    { 0x020A, "in.t2", "Тип входного датчика или сигнала для входа 2", UINT16 },
    { 0x020B, "dPt2", "Точность вывода температуры на входе 2", UINT16 },
    { 0x020C, "dP2", "Положение десятичной точки для входа 2", UINT16 },
@@ -80,18 +85,18 @@ struct {
    { 0x0210, "KU2", "Наклон характеристики для входа 2", UINT16, milli_dumper },
    { 0x0211, "Fb2", "Полоса фильтра для входа 2", UINT16, pv2_dumper },
    { 0x0212, "inF2", "Постоянная времени цифрового фильтра для входа 2", UINT16 },
-   { 0x0213, "Sqr2", "Вычислитель квадратного корня для аналогового входа 2", UINT16 },
+   { 0x0213, "Sqr2", "Вычислитель квадратного корня для аналогового входа 2", UINT16, onoff_dumper },
 
    { 0, NULL, "Группа Adv. Параметры регулирования" },
-   { 0x0300, "inP2", "Функция на входе 2", UINT16 },
-   { 0x0301, "CALC", "Формула вычислителя", UINT16 },
+   { 0x0300, "inP2", "Функция на входе 2", UINT16, func_dumper },
+   { 0x0301, "CALC", "Формула вычислителя", UINT16, calc_dumper },
    { 0x0302, "kPV1", "Весовой коэффициент для PV1", INT16, cent_dumper },
    { 0x0303, "kPV2", "Весовой коэффициент для PV2", INT16, cent_dumper },
    { 0x0304, "SL-L", "Нижняя граница уставки", INT16, pv1_dumper },
    { 0x0305, "SL-H", "Верхняя граница уставки", INT16, pv1_dumper },
-   { 0x0306, "orEU", "Тип управления при регулировании", UINT16 },
+   { 0x0306, "orEU", "Тип управления при регулировании", UINT16, heatcold_dumper },
    { 0x0307, "PV0", "Поддерживаемая величина при мощности 0%", INT16 },
-   { 0x0308, "ramP", "Режим «быстрого выхода на уставку»", UINT16 },
+   { 0x0308, "ramP", "Режим «быстрого выхода на уставку»", UINT16, onoff_dumper },
    { 0x0309, "P", "Полоса пропорциональности ПИД-регулятора", UINT16, pv1_dumper },
    { 0x030A, "I", "Интегральная постоянная ПИД-регулятора", UINT16 },
    { 0x030B, "D", "Дифференциальная постоянная ПИД-регулятора", UINT16 },
@@ -102,7 +107,7 @@ struct {
    { 0x030F, "OL-H", "Максимальная выходная мощность", UINT16 },
    { 0x0310, "LbA", "Время диагностики обрыва контура", UINT16 },
    { 0x0311, "LbAt", "Ширина зоны диагностики обрыва контура", UINT16, pv1_dumper },
-   { 0x0312, "MVEr", "Выходной сигнал в состоянии «ошибка»", UINT16 },
+   { 0x0312, "MVEr", "Выходной сигнал в состоянии «ошибка»", UINT16,  },
    { 0x0313, "MVSt", "Выходной сигнал в состоянии «остановка регулирования»", UINT16 },
    { 0x0314, "MdSt", "Состояние выхода  в состоянии «остановка регулирования»", UINT16 },
    { 0x0315, "Alt", "Тип логики работы компаратора", UINT16 },
@@ -118,11 +123,11 @@ struct {
 
    { 0, NULL, "Группа DISP. Параметры индикации" },
    { 0x0500, "rEt", "Время выхода из режима программирования", UINT16 },
-   { 0x0501, "DiS1", "Режим индикации 1", UINT16 },
-   { 0x0502, "DiS2", "Режим индикации 2", UINT16 },
-   { 0x0503, "DiS3", "Режим индикации 3", UINT16 },
-   { 0x0504, "DiS4", "Режим индикации 4", UINT16 },
-   { 0x0505, "DiS5", "Режим индикации 5", UINT16 },
+   { 0x0501, "DiS1", "Режим индикации 1", UINT16, onoff_dumper },
+   { 0x0502, "DiS2", "Режим индикации 2", UINT16, onoff_dumper },
+   { 0x0503, "DiS3", "Режим индикации 3", UINT16, onoff_dumper },
+   { 0x0504, "DiS4", "Режим индикации 4", UINT16, onoff_dumper },
+   { 0x0505, "DiS5", "Режим индикации 5", UINT16, onoff_dumper },
    
    { 0, NULL, "Группа GraF. Параметры графика коррекции уставки" },
    { 0x0600, "Node", "Количество узловых точек графика", UINT16 },
@@ -158,6 +163,8 @@ uint16_t values[10000];			/* FIXME */
 int data_size(int idx)
 {
   switch (registers[idx].type) {
+  case GROUP:
+	return 0;
   case HEX:
   case INT16:
   case UINT16:
@@ -167,8 +174,6 @@ int data_size(int idx)
   case FLOAT32:
     return 2;
     break;
-  case 0:
-	return 0;
   default:
     printf("<UNKNOWN data type>");
     return -1;
@@ -296,11 +301,34 @@ uint16_t get_word(uint16_t number)
   for (int reg = 0; reg < sizeof registers / sizeof registers[0]; ++reg) {
 	if (registers[reg].number == number)
 	  return values[idx];
-	if (registers[reg].name == NULL)
-	  ++reg;
 	idx += data_size(reg);
   }
   assert(0);
+}
+
+void func_dumper(int idx)
+{
+  printf( "%s", ((char *[]){ "отключен", "измерительный вход", "ключ", "рез. ДП", "ток ДП" })[get_word(registers[idx].number)]);
+}  
+
+void calc_dumper(int idx)
+{
+  printf( "%s", ((char *[]){ "средневзвешенная сумма", "отношение", "корень из средневзвешенной суммы", "коррекция уставки" })[get_word(registers[idx].number)]);
+}  
+
+void startstop_dumper(int idx)
+{
+  printf( "%s", ((char *[]){ "остановка", "запуск" })[get_word(registers[idx].number)]);
+}
+
+void heatcold_dumper(int idx)
+{
+  printf( "%s", ((char *[]){ "нагреватель", "холодильник" })[get_word(registers[idx].number)]);
+}
+
+void onoff_dumper(int idx)
+{
+  printf( "%s", ((char *[]){ "выкл", "вкл" })[get_word(registers[idx].number)]);
 }
 
 void scale_dumper(int idx, int scale)
@@ -423,7 +451,7 @@ int main(int argc, char *argv[])
   if (verbose)
     hello();
   
-  modbus_t *ctx = modbus_new_tcp_pi( host, port);
+  modbus_t *ctx = modbus_new_tcp_pi(host, port);
   if ( ctx == NULL ) {
     fprintf(stderr, "Can't create MODBUS TCP context\n");
     return -1;
