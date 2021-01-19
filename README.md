@@ -1,8 +1,8 @@
 # tpm2xx
 Owen TPM2xx MODBUS utility
 
-Requirements: libmodbus
+Requirements: Unix, libmodbus
 
-Interface: MODBUS TCP server
+Controller access: Modbus RTU over TCP
 
 Supported devices: only tested with Valtec K200M (Owen TPM212 clone)

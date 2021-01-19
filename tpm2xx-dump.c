@@ -21,7 +21,7 @@ struct {
   char *name;
   char *comment;
   enum {
-        GROUP,
+        GROUP,					/* GROUP should be first one, so type _defaults_ to it :) */
         HEX,
         INT16,
         UINT16,
@@ -157,8 +157,6 @@ uint16_t values[10000];			/* FIXME */
 
 int data_size(int idx)
 {
-  if (registers[idx].name == NULL)
-    return 0;
   switch (registers[idx].type) {
   case HEX:
   case INT16:
@@ -169,6 +167,8 @@ int data_size(int idx)
   case FLOAT32:
     return 2;
     break;
+  case 0:
+	return 0;
   default:
     printf("<UNKNOWN data type>");
     return -1;
@@ -189,6 +189,8 @@ int read_register(modbus_t *ctx, int idx)
 	current_value += size;
 	//if ( res == -1 && verbose )
 	//  fprintf(stderr, "Can't read register %d (0x%04x) (size %d): %s\n", idx, registers[idx].number, size, modbus_strerror(errno));
+	if (res == -1)
+	  registers[idx].number = 0;
   }
 }
 
@@ -284,7 +286,7 @@ void dump_raw(int idx)
 }
 
 void pv_dumper(int16_t value, uint16_t decimals)
-{  
+{
   printf( "%.1f", ((float)value) / pow(10., (float)decimals));
 }
 
@@ -333,11 +335,14 @@ void pv2_dumper(int idx)
 
 void dump_register(int idx)
 {
-  if (registers[idx].name == NULL) {
+  if (registers[idx].type == GROUP) {
     if (verbose)
       printf( "------------ %s ------------\n", registers[idx].comment );
     return;
   }
+
+  if (registers[idx].number == 0) return; /* Skip over read errors */
+
   printf("%s ", registers[idx].name);
   if (verbose)
     printf("(%s)", registers[idx].comment);
