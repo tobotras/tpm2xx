@@ -11,6 +11,7 @@
 int pretty = 0;
 unsigned int current_value;
 int graf_points;
+char *group_name = NULL, *current_group;
 void pv1_dumper(int);
 void pv2_dumper(int);
 void dec_dumper(int);
@@ -39,7 +40,7 @@ struct {
   void (*printer)(int);
 } registers[] =
   {
-   { 0, NULL, "Группа LvoP. Оперативные параметры" },  
+   { 0, NULL, "Группа LvoPo. Оперативные параметры" },
    { 0x0000, "STAT", "Регистр статуса", HEX, state_dumper },
    { 0x0001, "PV1", "Измеренная величина на входе 1", INT16, pv1_dumper },
    { 0x0002, "PV2", "Измеренная величина на входе 2", INT16, pv2_dumper },
@@ -48,13 +49,13 @@ struct {
    { 0x0005, "SET.P", "Текущее значение уставки работающего регулятора",  INT16, pv1_dumper },
    { 0x0006, "O", "Выходная мощность ПИД-регулятора (положение задвижки)", UINT16 },
 
-   { 0, NULL, "Группа LvoP. Рабочие параметры прибора" },
+   { 0, NULL, "Группа LvoPr. Рабочие параметры прибора" },
    { 0x0007, "r-L", "Переход на внешнее управление", UINT16 },
    { 0x0008, "r.out", "Выходной сигнал регулятора", INT16, milli_dumper },
    { 0x0009, "R-S", "Запуск/остановка регулирования", UINT16, startstop_dumper },
    { 0x000A, "AT", "Запуск/остановка процесса автонастройки", UINT16, startstop_dumper },
 
-   { 0, NULL, "Группа LvoP. Оперативные параметры прибора" },
+   { 0, NULL, "Группа LvoPp. Оперативные параметры прибора" },
    { 0x1000, "DEV", "Тип прибора", CHAR8 },
    { 0x1004, "VER", "Версия прибора", CHAR8 },
    { 0x1008, "STAT", "Регистр статуса", HEX, state_dumper },
@@ -183,25 +184,52 @@ int data_size(int idx)
   }
 }
 
-int read_register(modbus_t *ctx, int idx)
+char *recode8(char *text)
 {
-  if (registers[idx].name == NULL ) {
+  char dest[1000], *dst;            /* FIXME */
+  bzero(dest, 1000);
+  dst = dest;
+  size_t in = 300, out = 1000;              /* FIXME */
+  iconv_t cd = iconv_open("UTF-8", "CP1251", to);
+  iconv(cd, &text, &in, &dst, &out);
+  iconv_close(cd);
+  return strdup(dest);
+}
+
+char *extract_group_name(char *utf)
+{
+  char *begin = recode8(utf);
+  while (begin[-1] != ' ')
+    ++begin;
+  char *end = begin;
+  while (*end != '.')
+    ++end;
+  *end = '\0';
+  return strdup(begin);
+}
+
+void read_register(modbus_t *ctx, int idx)
+{
+  if (registers[idx].type == GROUP ) {
+    current_group = extract_group_name(registers[idx].comment);
 	if (pretty) {
 	  printf(".");
 	  fflush(stdout);
 	}
-  } else {  
-	int size = data_size(idx);
-	int res;
-	res = modbus_read_registers(ctx, registers[idx].number, size, values + current_value);
-	current_value += size;
-	//if ( res == -1 && pretty )
-	//  fprintf(stderr, "Can't read register %d (0x%04x) (size %d): %s\n", idx, registers[idx].number, size, modbus_strerror(errno));
-	if (res == -1) {
-	  registers[idx].number = 0;
-      registers[idx].name = NULL;
-    }
+    return;
   }
+
+  int size = data_size(idx);
+  int res;
+
+  if (group_name && strcmp(current_group, group_name)
+      && (!pretty || registers[idx].number != 0x0202 && registers[idx].number != 0x020C)) /* Always read the output coefficents */
+    res = -1;
+  else
+    res = modbus_read_registers(ctx, registers[idx].number, size, values + current_value);
+  current_value += size;
+  if (res == -1)
+    registers[idx].name = NULL; /* Read error */
 }
 
 int read_registers(modbus_t *ctx)
@@ -209,23 +237,11 @@ int read_registers(modbus_t *ctx)
   if (pretty)
 	printf("Reading registers values");
   current_value = 0;
+  current_group = NULL;
   for (int i = 0; i < sizeof registers / sizeof registers[0]; ++i)
     read_register(ctx, i);
   if (pretty)
 	puts("");
-}
-
-char *recode8(char *text)
-{
-  static char dest[30], *dst;
-
-  bzero(dest, 30);
-  dst = dest;
-  size_t in = 8, out = 30;
-  iconv_t cd = iconv_open("UTF-8", "CP1251");
-  iconv(cd, &text, &in, &dst, &out);
-  iconv_close(cd);
-  return dest;
 }
 
 void dump_raw(int idx)
@@ -383,30 +399,38 @@ void dump_register(int idx)
 {
   if (registers[idx].type == GROUP) {
     graf_points = -1;
-    if (pretty)
-      printf( "------------ %s ------------\n", registers[idx].comment );
+    current_group = extract_group_name(registers[idx].comment);
+  }
+
+  if (group_name && strcmp(current_group, group_name)) /* Skip over unneeded groups */
+    return;
+
+  if (pretty && registers[idx].type == GROUP && group_name && !strcmp(current_group, group_name)) {
+    printf( "------------ %s ------------\n", registers[idx].comment );
     return;
   }
 
-  if (registers[idx].number == 0 && registers[idx].name == NULL) return; /* Skip over read errors */
+  if (registers[idx].name == NULL /* Skip over read errors */
+      || pretty && graf_points == 0) /* Skip over unused graf points */
+    return;
 
-  if (!pretty || graf_points != 0) {
-    if (graf_points != -1)
-      graf_points--;
-    printf("%s ", registers[idx].name);
-    if (pretty)
-      printf("(%s)", registers[idx].comment);
-    printf(": ");
-    if (!pretty || !registers[idx].printer)
-      registers[idx].printer = dump_raw;
-    (*registers[idx].printer)(idx);
-    puts("");
-  }
+  if (graf_points != -1)
+    graf_points--;
+
+  printf("%s ", registers[idx].name);
+  if (pretty)
+    printf("(%s)", registers[idx].comment);
+  printf(": ");
+  if (!pretty || !registers[idx].printer)
+    registers[idx].printer = dump_raw;
+  (*registers[idx].printer)(idx);
+  puts("");
 }
 
 void dump_registers(void)
 {
   current_value = 0;
+  current_group = NULL;
   for (int i = 0; i < sizeof registers / sizeof registers[0]; ++i) {
     dump_register(i);
     current_value += data_size(i);
@@ -422,11 +446,19 @@ void usage(char *me)
 {
   hello();
   fprintf(stderr,
-		  "Usage: %s -s server-name -p port-number [-t timeout-seconds] [-P] [-d]\n"
+		  "Usage: %s -s server-name -p port-number [-t timeout-seconds] [-g group-name] [-P] [-d] [-G]\n"
+          "      -G: list parameter groups\n"
 		  "      -P: pretty-print outut\n"
 		  "      -d: print debug info\n",
 		  me);
   exit(-1);
+}
+
+void list_groups(void)
+{
+  for (int reg = 0; reg < sizeof registers / sizeof registers[0]; ++reg)
+	if (registers[reg].type == GROUP)
+      printf("%s\n", registers[reg].comment);
 }
 
 int main(int argc, char *argv[])
@@ -437,8 +469,14 @@ int main(int argc, char *argv[])
   int debug = 0;
 
   opterr = 0;
-  while ((option = getopt(argc, argv, "s:p:t:Pd")) != -1){ 
+  while ((option = getopt(argc, argv, "s:p:t:Pdg:G")) != -1) {
     switch (option) {
+    case 'G':
+      list_groups();
+      return 0;
+    case 'g':
+      group_name = optarg;
+      break;
     case 't':
       timeout = atoi(optarg);
 	  if (timeout < 1) {
