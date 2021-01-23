@@ -405,7 +405,7 @@ void dump_register(int idx)
   if (group_name && strcmp(current_group, group_name)) /* Skip over unneeded groups */
     return;
 
-  if (pretty && registers[idx].type == GROUP && group_name && !strcmp(current_group, group_name)) {
+  if (pretty && registers[idx].type == GROUP && (!group_name || !strcmp(current_group, group_name))) {
     printf( "------------ %s ------------\n", registers[idx].comment );
     return;
   }
