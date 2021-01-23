@@ -8,8 +8,9 @@
 #include <math.h>
 #include <assert.h>
 
-int verbose = 0;
+int pretty = 0;
 unsigned int current_value;
+int graf_points;
 void pv1_dumper(int);
 void pv2_dumper(int);
 void dec_dumper(int);
@@ -157,7 +158,7 @@ struct {
    { 0, NULL, "Группа SECR. Параметры секретности" },
    { 0x0700, "oAPt", "Защита параметров от просмотра", UINT16 },
    { 0x0701, "wtPt", "Защита параметров от изменения", UINT16 },
-   { 0x0702, "EdPt", "Защита отдельный параметров от просмотра и изменений", UINT16, onoff_dumper },
+   { 0x0702, "EdPt", "Защита отдельных параметров от просмотра и изменений", UINT16, onoff_dumper },
   };
 
 uint16_t values[10000];			/* FIXME */
@@ -185,7 +186,7 @@ int data_size(int idx)
 int read_register(modbus_t *ctx, int idx)
 {
   if (registers[idx].name == NULL ) {
-	if (verbose) {
+	if (pretty) {
 	  printf(".");
 	  fflush(stdout);
 	}
@@ -194,7 +195,7 @@ int read_register(modbus_t *ctx, int idx)
 	int res;
 	res = modbus_read_registers(ctx, registers[idx].number, size, values + current_value);
 	current_value += size;
-	//if ( res == -1 && verbose )
+	//if ( res == -1 && pretty )
 	//  fprintf(stderr, "Can't read register %d (0x%04x) (size %d): %s\n", idx, registers[idx].number, size, modbus_strerror(errno));
 	if (res == -1) {
 	  registers[idx].number = 0;
@@ -205,12 +206,12 @@ int read_register(modbus_t *ctx, int idx)
 
 int read_registers(modbus_t *ctx)
 {
-  if (verbose)
+  if (pretty)
 	printf("Reading registers values");
   current_value = 0;
   for (int i = 0; i < sizeof registers / sizeof registers[0]; ++i)
     read_register(ctx, i);
-  if (verbose)
+  if (pretty)
 	puts("");
 }
 
@@ -229,6 +230,9 @@ char *recode8(char *text)
 
 void dump_raw(int idx)
 {
+  if (!strcmp(registers[idx].name, "Node")) {
+    graf_points = values[current_value] * 2;
+  }
   char buf[9];
   switch (registers[idx].type) {
   case HEX:
@@ -279,7 +283,7 @@ uint16_t get_word(uint16_t number)
 void state_dumper(int idx)
 {
   uint16_t state = get_word(registers[idx].number);
-  if (verbose) {
+  if (pretty) {
 	struct {
 	  uint16_t flag;
 	  char *text;
@@ -378,21 +382,26 @@ void pv2_dumper(int idx)
 void dump_register(int idx)
 {
   if (registers[idx].type == GROUP) {
-    if (verbose)
+    graf_points = -1;
+    if (pretty)
       printf( "------------ %s ------------\n", registers[idx].comment );
     return;
   }
 
   if (registers[idx].number == 0 && registers[idx].name == NULL) return; /* Skip over read errors */
 
-  printf("%s ", registers[idx].name);
-  if (verbose)
-    printf("(%s)", registers[idx].comment);
-  printf(": ");
-  if (!verbose || !registers[idx].printer)
-	registers[idx].printer = dump_raw;
-  (*registers[idx].printer)(idx);
-  puts("");
+  if (!pretty || graf_points != 0) {
+    if (graf_points != -1)
+      graf_points--;
+    printf("%s ", registers[idx].name);
+    if (pretty)
+      printf("(%s)", registers[idx].comment);
+    printf(": ");
+    if (!pretty || !registers[idx].printer)
+      registers[idx].printer = dump_raw;
+    (*registers[idx].printer)(idx);
+    puts("");
+  }
 }
 
 void dump_registers(void)
@@ -413,8 +422,8 @@ void usage(char *me)
 {
   hello();
   fprintf(stderr,
-		  "Usage: %s -h hostname -p port [-t timeout] [-v] [-d]\n"
-		  "      -v: show human-readable comments and values\n"
+		  "Usage: %s -s server-name -p port-number [-t timeout-seconds] [-P] [-d]\n"
+		  "      -P: pretty-print outut\n"
 		  "      -d: print debug info\n",
 		  me);
   exit(-1);
@@ -428,7 +437,7 @@ int main(int argc, char *argv[])
   int debug = 0;
 
   opterr = 0;
-  while ((option = getopt(argc, argv, "h:p:t:vd")) != -1){ 
+  while ((option = getopt(argc, argv, "s:p:t:Pd")) != -1){ 
     switch (option) {
     case 't':
       timeout = atoi(optarg);
@@ -437,7 +446,7 @@ int main(int argc, char *argv[])
 		exit(-1);
 	  }
       break;
-    case 'h':
+    case 's':
       host = optarg;
       break;
     case 'p':
@@ -447,8 +456,8 @@ int main(int argc, char *argv[])
 		exit(-1);
 	  }
       break;
-    case 'v':
-      verbose = 1;
+    case 'P':
+      pretty = 1;
       break;
     case 'd':
       debug = 1;
@@ -462,7 +471,7 @@ int main(int argc, char *argv[])
   if (!host || !port)
     usage(argv[0]);
 
-  if (verbose)
+  if (pretty)
     hello();
   
   modbus_t *ctx = modbus_new_tcp_pi(host, port);
