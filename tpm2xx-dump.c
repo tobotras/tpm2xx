@@ -190,7 +190,7 @@ char *recode8(char *text)
   bzero(dest, 1000);
   dst = dest;
   size_t in = 300, out = 1000;              /* FIXME */
-  iconv_t cd = iconv_open("UTF-8", "CP1251", to);
+  iconv_t cd = iconv_open("UTF-8", "CP1251");
   iconv(cd, &text, &in, &dst, &out);
   iconv_close(cd);
   return strdup(dest);
@@ -456,9 +456,11 @@ void usage(char *me)
 
 void list_groups(void)
 {
+  hello();
   for (int reg = 0; reg < sizeof registers / sizeof registers[0]; ++reg)
 	if (registers[reg].type == GROUP)
-      printf("%s\n", registers[reg].comment);
+      printf("\n%s", registers[reg].comment);
+  puts("");
 }
 
 int main(int argc, char *argv[])
