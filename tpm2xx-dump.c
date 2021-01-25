@@ -11,7 +11,8 @@
 int pretty = 0;
 unsigned int current_value;
 int graf_points;
-char *group_name = NULL, *current_group;
+char *groups[10];
+char *current_group;
 void pv1_dumper(int);
 void pv2_dumper(int);
 void dec_dumper(int);
@@ -208,11 +209,20 @@ char *extract_group_name(char *utf)
   return strdup(begin);
 }
 
+int skip_current_group(void)
+{
+  int i;
+  for (i = 0; groups[i]; ++i)
+    if (!strcmp(groups[i], current_group))
+      return 0;
+  return i > 0;
+}
+
 void read_register(modbus_t *ctx, int idx)
 {
   if (registers[idx].type == GROUP ) {
     current_group = extract_group_name(registers[idx].comment);
-	if (pretty) {
+	if (pretty && !skip_current_group()) {
 	  printf(".");
 	  fflush(stdout);
 	}
@@ -222,14 +232,14 @@ void read_register(modbus_t *ctx, int idx)
   int size = data_size(idx);
   int res;
 
-  if (group_name && strcmp(current_group, group_name)
+  if (skip_current_group()
       && (!pretty || registers[idx].number != 0x0202 && registers[idx].number != 0x020C)) /* Always read the output coefficents */
     res = -1;
   else
     res = modbus_read_registers(ctx, registers[idx].number, size, values + current_value);
   current_value += size;
   if (res == -1)
-    registers[idx].name = NULL; /* Read error */
+    registers[idx].name = NULL; /* Read error or skipped value */
 }
 
 int read_registers(modbus_t *ctx)
@@ -241,7 +251,7 @@ int read_registers(modbus_t *ctx)
   for (int i = 0; i < sizeof registers / sizeof registers[0]; ++i)
     read_register(ctx, i);
   if (pretty)
-	puts("");
+	putchar('\r');
 }
 
 void dump_raw(int idx)
@@ -402,18 +412,18 @@ void dump_register(int idx)
     current_group = extract_group_name(registers[idx].comment);
   }
 
-  if (group_name && strcmp(current_group, group_name)) /* Skip over unneeded groups */
+  if (skip_current_group())
     return;
 
-  if (pretty && registers[idx].type == GROUP && (!group_name || !strcmp(current_group, group_name))) {
+  if (pretty && registers[idx].type == GROUP) {
     printf( "------------ %s ------------\n", registers[idx].comment );
     return;
   }
-
+  
   if (registers[idx].name == NULL /* Skip over read errors */
       || pretty && graf_points == 0) /* Skip over unused graf points */
     return;
-
+  
   if (graf_points != -1)
     graf_points--;
 
@@ -446,9 +456,10 @@ void usage(char *me)
 {
   hello();
   fprintf(stderr,
-		  "Usage: %s -s server-name -p port-number [-t timeout-seconds] [-g group-name] [-P] [-d] [-G]\n"
-          "      -G: list parameter groups\n"
-		  "      -P: pretty-print outut\n"
+		  "Usage: %s -s server-name -p port-number [-t timeout-seconds] [-g groups] [-P] [-d] [-G]\n"
+          "      -G: print known parameter groups and exit\n"
+          "      -g group1,group2,...: restrict parameter groups to read\n"
+		  "      -P: pretty-print output\n"
 		  "      -d: print debug info\n",
 		  me);
   exit(-1);
@@ -461,6 +472,22 @@ void list_groups(void)
 	if (registers[reg].type == GROUP)
       printf("\n%s", registers[reg].comment);
   puts("");
+}
+
+void parse_groups(char *opt)
+{
+  int idx = 0, eof = 0;
+  while (*opt && !eof) {
+    char *comma;
+    for (comma = opt; *comma != '\0' && *comma != ','; ++comma)
+      ;
+    if (*comma == '\0')
+      eof = 1;
+    *comma = '\0';
+    groups[idx++] = strdup(opt);
+    opt = comma + 1;
+  }
+  groups[idx] = NULL;
 }
 
 int main(int argc, char *argv[])
@@ -477,7 +504,7 @@ int main(int argc, char *argv[])
       list_groups();
       return 0;
     case 'g':
-      group_name = optarg;
+      parse_groups(optarg);
       break;
     case 't':
       timeout = atoi(optarg);
