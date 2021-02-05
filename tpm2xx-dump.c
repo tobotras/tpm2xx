@@ -222,7 +222,7 @@ void read_register(modbus_t *ctx, int idx)
 {
   if (registers[idx].type == GROUP ) {
     current_group = extract_group_name(registers[idx].comment);
-	if (pretty && !skip_current_group()) {
+	if (pretty && isatty(1) && !skip_current_group()) {
 	  printf(".");
 	  fflush(stdout);
 	}
@@ -244,13 +244,13 @@ void read_register(modbus_t *ctx, int idx)
 
 int read_registers(modbus_t *ctx)
 {
-  if (pretty)
+  if (pretty && isatty(1))
 	printf("Reading registers values");
   current_value = 0;
   current_group = NULL;
   for (int i = 0; i < sizeof registers / sizeof registers[0]; ++i)
     read_register(ctx, i);
-  if (pretty)
+  if (pretty && isatty(1))
 	putchar('\r');
 }
 
