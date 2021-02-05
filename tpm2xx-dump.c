@@ -442,10 +442,11 @@ void dump_register(int idx)
   if (graf_points != -1)
     graf_points--;
 
-  printf("0x%04x | %s ", registers[idx].number, registers[idx].name);
-  if (pretty)
-    printf("(%s)", registers[idx].comment);
-  printf(": ");
+  if (pretty) 
+    printf("%s (%s): ", registers[idx].name, registers[idx].comment);
+  else
+    printf("0x%04x|", registers[idx].number);
+    
   if (!pretty || !registers[idx].printer)
     registers[idx].printer = dump_raw;
   (*registers[idx].printer)(idx);
