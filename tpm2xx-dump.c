@@ -8,11 +8,26 @@
 #include <math.h>
 #include <assert.h>
 
+/* User options */
+char *host = NULL;
+char *port = NULL;
+int timeout = 10;
+int debug = 0;
+enum {
+      M_READ,
+      M_WRITE,
+      M_NONE
+} mode = M_NONE;
 int pretty = 0;
+char *groups[10];
+int write_address = 0;
+char *write_value = NULL;
+
+/* Global state */
+char *current_group;
 unsigned int current_value;
 int graf_points;
-char *groups[10];
-char *current_group;
+
 void pv1_dumper(int);
 void pv2_dumper(int);
 void dec_dumper(int);
@@ -427,7 +442,7 @@ void dump_register(int idx)
   if (graf_points != -1)
     graf_points--;
 
-  printf("%s ", registers[idx].name);
+  printf("0x%04x | %s ", registers[idx].number, registers[idx].name);
   if (pretty)
     printf("(%s)", registers[idx].comment);
   printf(": ");
@@ -447,21 +462,33 @@ void dump_registers(void)
   }
 }
 
-void hello(void)
+void write_register(modbus_t *ctx)
 {
-  printf("tpm2xx-dump v0.1 (c) Boris Tobotras, 2021\n");
+  for (int i = 0; i <  sizeof registers / sizeof registers[0]; ++i)
+    if (registers[i].number == write_address) {
+      printf( "Going to write into idx %d\n", i);
+      return;
+    }
+  fprintf(stderr, "Unknown register: 0x%x\n", write_address);
 }
 
-void usage(char *me)
+void hello(void)
+{
+  printf("tpm2xx v0.2 (c) Boris Tobotras, 2021\n");
+}
+
+void usage(void)
 {
   hello();
   fprintf(stderr,
-		  "Usage: %s -s server-name -p port-number [-t timeout-seconds] [-g groups] [-P] [-d] [-G]\n"
+		  "Usage: tpm2xx -s server-name -p port-number [-t timeout-seconds] [-d] [-r] [-g groups] [-P] [-G] [-w register=value]\n"
+          "      -r: read registers\n"
+          "      -w register_number=register_value\n"
           "      -G: print known parameter groups and exit\n"
-          "      -g group1,group2,...: restrict parameter groups to read\n"
+          "      -g group1[,group2,...]: restrict parameter groups to read\n"
 		  "      -P: pretty-print output\n"
-		  "      -d: print debug info\n",
-		  me);
+		  "      -d: print debug info\n\n"
+          "-r and -w are mutually exclusive.\n");
   exit(-1);
 }
 
@@ -488,21 +515,41 @@ void parse_groups(char *opt)
     opt = comma + 1;
   }
   groups[idx] = NULL;
+  if (idx == 0 || groups[0][0] == '\0')
+    usage();
 }
 
-int main(int argc, char *argv[])
+void parse_write(char *opt)
 {
-  char *host = NULL;
-  char *port = NULL;
-  int timeout = 10, option, portv;
-  int debug = 0;
+  char *eq;
+  for (eq = opt; *eq != '\0' && *eq != '='; ++eq)
+    ;
+  if (*eq == '\0')
+    usage();
+  *eq = '\0';
+  write_value = eq + 1;
+  errno = 0;
+  write_address = (int) strtol(opt, NULL, 0);
+  if (errno)
+    usage();
+}
 
-  opterr = 0;
-  while ((option = getopt(argc, argv, "s:p:t:Pdg:G")) != -1) {
+void parse_options(int argc, char *argv[])
+{
+  int option, portv;
+  
+  while ((option = getopt(argc, argv, "s:p:t:Pdg:Gw:rh")) != -1) {
     switch (option) {
+    case 'r':
+      mode = M_READ;
+      break;
+    case 'w':
+      mode = M_WRITE;
+      parse_write(optarg);
+      break;
     case 'G':
       list_groups();
-      return 0;
+      exit(0);
     case 'g':
       parse_groups(optarg);
       break;
@@ -517,7 +564,7 @@ int main(int argc, char *argv[])
       host = optarg;
       break;
     case 'p':
-	  portv = atoi(port = optarg);
+      portv = atoi(port = optarg);
 	  if (portv < 1 || portv > 65535) {
 		fprintf(stderr, "Incorrect port number\n");
 		exit(-1);
@@ -530,14 +577,21 @@ int main(int argc, char *argv[])
       debug = 1;
       break;
 	case '?':
+    case 'h':
     default:
-      usage(argv[0]);
+      usage();
     }
   }
 
-  if (!host || !port)
-    usage(argv[0]);
+  if ((mode == M_NONE || !host || !port) ||
+      ((groups[0] || pretty) && mode == M_WRITE) ||
+      (write_address && mode == M_READ))
+    usage();
+}  
 
+int main(int argc, char *argv[])
+{
+  parse_options(argc, argv);
   if (pretty)
     hello();
   
@@ -563,8 +617,11 @@ int main(int argc, char *argv[])
     fprintf(stderr, "Can't set slave id: %s\n", modbus_strerror(errno));
     return -1;
   }
-    
-  read_registers(ctx);
-  dump_registers();    
+
+  if (mode == M_READ) {
+    read_registers(ctx);
+    dump_registers();
+  } else
+    write_register(ctx);
   return 0;
 }
