@@ -463,16 +463,6 @@ void dump_registers(void)
   }
 }
 
-void write_register(modbus_t *ctx)
-{
-  for (int i = 0; i <  sizeof registers / sizeof registers[0]; ++i)
-    if (registers[i].number == write_address) {
-      printf( "Going to write into idx %d\n", i);
-      return;
-    }
-  fprintf(stderr, "Unknown register: 0x%x\n", write_address);
-}
-
 void hello(void)
 {
   printf("tpm2xx v0.2 (c) Boris Tobotras, 2021\n");
@@ -491,6 +481,25 @@ void usage(void)
 		  "      -d: print debug info\n\n"
           "-r and -w are mutually exclusive.\n");
   exit(-1);
+}
+
+void write_register(modbus_t *ctx)
+{
+  for (int i = 0; i <  sizeof registers / sizeof registers[0]; ++i)
+    if (registers[i].number == write_address) {
+	  int16_t value;
+	  errno = 0;
+	  value = (int16_t) strtol(write_value, NULL, 0);
+	  if (errno)
+		usage();
+	  if (modbus_write_registers(ctx, write_address, 1, &value) != 1)
+		fprintf(stderr, "Error writing into 0x%04x: %s\n", write_address, strerror(errno));
+	  else
+		if (pretty)
+		  printf("0x%04x set to %d\n", write_address, value);
+      return;
+    }
+  fprintf(stderr, "Unknown register: 0x%x\n", write_address);
 }
 
 void list_groups(void)
@@ -585,7 +594,7 @@ void parse_options(int argc, char *argv[])
   }
 
   if ((mode == M_NONE || !host || !port) ||
-      ((groups[0] || pretty) && mode == M_WRITE) ||
+      (groups[0] && mode == M_WRITE) ||
       (write_address && mode == M_READ))
     usage();
 }  
