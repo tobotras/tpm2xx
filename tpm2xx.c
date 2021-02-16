@@ -465,7 +465,8 @@ void dump_registers(void)
 
 void hello(void)
 {
-  printf("tpm2xx v0.2 (c) Boris Tobotras, 2021\n");
+  printf("tpm2xx v0.2 (c) Boris Tobotras, 2021\n"
+		 "https://github.com/tobotras/tpm2xx\n");
 }
 
 void usage(void)
@@ -511,6 +512,17 @@ void list_groups(void)
   puts("");
 }
 
+void verify_group(char *group)
+{
+  for (int reg = 0; reg < sizeof registers / sizeof registers[0]; ++reg)
+	if (registers[reg].type == GROUP
+        && !strncmp(extract_group_name(registers[reg].comment), group, 10))
+      return;
+  list_groups();
+  fprintf(stderr, "Unknown group name: '%s'\n", group);
+  exit(1);
+}
+
 void parse_groups(char *opt)
 {
   int idx = 0, eof = 0;
@@ -521,7 +533,8 @@ void parse_groups(char *opt)
     if (*comma == '\0')
       eof = 1;
     *comma = '\0';
-    groups[idx++] = strdup(opt);
+    groups[idx] = strdup(opt);
+    verify_group(groups[idx++]);
     opt = comma + 1;
   }
   groups[idx] = NULL;
@@ -593,11 +606,11 @@ void parse_options(int argc, char *argv[])
     }
   }
 
-  if ((mode == M_NONE || !host || !port) ||
-      (groups[0] && mode == M_WRITE) ||
-      (write_address && mode == M_READ))
+  if (mode == M_NONE || !host || !port ||
+      groups[0] && mode == M_WRITE ||
+      write_address && mode == M_READ)
     usage();
-}  
+}
 
 int main(int argc, char *argv[])
 {
